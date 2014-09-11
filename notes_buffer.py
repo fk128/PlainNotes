@@ -1,5 +1,6 @@
 import sublime, sublime_plugin
 import os, fnmatch, re
+import yaml
 
 TAB_SIZE = 2
 COL_WIDTH = 30
@@ -47,9 +48,36 @@ class NotesBufferRefreshCommand(sublime_plugin.TextCommand):
                         if fnmatch.fnmatch(f, "*." + ext):
                             line_str = '{0}≡ {1}'.format(subindent, re.sub('\.note$', '', f))
                             line_path = os.path.normpath(os.path.join(root, f))
+                            yaml_read = self.parseYAML(line_path)
+                            line_str = line_str + ' -- created: ' + yaml_read['date'].strftime("%Y-%m-%d %H:%M")
+                            #line_str = line_str + '-- modified: ' + str(os.path.getmtime(line_path))
                             lines.append( (line_str, line_path)  )
+
         return lines
 
+    def parseYAML(self,path):
+     stream = open(path, "r")
+     s = 0
+     e = 0
+     yaml_read = '';
+     for line in stream:
+      if s == 1 and re.match('---',line):
+        e = 1
+      if s == 0 and re.match('---',line):
+        s = 1
+      if e == 1:
+        break
+      if not re.match('---',line):
+       yaml_read = yaml_read + line +'\n' 
+     stream.close()
+     yaml_read = yaml_read + ''
+
+     doc = yaml.load(yaml_read)
+
+     yaml_read = '';
+     for k in doc:
+      yaml_read = yaml_read + k + ':' 
+     return doc
 
 class NotesBufferOpenCommand(sublime_plugin.TextCommand):
     def run(self, edit):

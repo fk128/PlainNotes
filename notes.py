@@ -31,7 +31,9 @@ class NotesListCommand(sublime_plugin.ApplicationCommand):
              title = re.sub('\.' + ext + '$', '', name)
              tag = re.sub(root, '', path)
              tag = re.sub('/', '', tag)
-             note_files.append((re.sub('\.' + ext + '$', '', tag + ": " + title),
+             if tag != '':
+              tag = ' (' + tag + ')'
+             note_files.append((re.sub('\.' + ext + '$', '', title + tag  ),
                         os.path.join(path, name),
                         os.path.getmtime(os.path.join(path, name))
                        ))
