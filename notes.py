@@ -29,13 +29,13 @@ class NotesListCommand(sublime_plugin.ApplicationCommand):
          for ext in settings().get("note_file_extensions"):
            if (not relpath.startswith(".brain")) and fnmatch.fnmatch(name, "*." + ext):
              title = re.sub('\.' + ext + '$', '', name)
-             tag = re.sub(root, '', path)
-             tag = re.sub('/', '', tag)
-             if tag != '':
-              tag = ' (' + tag + ')'
-             note_files.append((re.sub('\.' + ext + '$', '', title + tag  ),
+             tag = path.replace(root, '').replace(os.path.sep, '')
+             if not tag == '':
+              tag = tag + ': '
+             note_files.append((re.sub('\.' + ext + '$', '', tag + title),
                         os.path.join(path, name),
-                        os.path.getmtime(os.path.join(path, name))
+                        os.path.getmtime(os.path.join(path, name)),
+                        tag
                        ))
      note_files.sort(key=lambda item: item[2], reverse=True)
      return note_files
@@ -45,6 +45,65 @@ class NotesListCommand(sublime_plugin.ApplicationCommand):
        return
      file_path = self.file_list[index][1]
      sublime.run_command("notes_open", {"file_path": file_path})
+
+class NotesRenameCommand(sublime_plugin.ApplicationCommand):
+
+  def run(self):
+     root = os.path.normpath(os.path.expanduser(settings().get("root")))
+     window = sublime.active_window()
+     self.notes_dir = os.path.expanduser(root)
+     self.file_list = self.find_notes(root)
+     window.show_quick_panel([f[0] for f in self.file_list], self.rename_note)
+
+  def find_notes(self, root):
+     note_files = []
+     for path, subdirs, files in os.walk(self.notes_dir, topdown=False):
+       relpath = os.path.relpath(path, root)
+       for name in files:
+         for ext in settings().get("note_file_extensions"):
+           if (not relpath.startswith(".brain")) and fnmatch.fnmatch(name, "*." + ext):
+             title = re.sub('\.' + ext + '$', '', name)
+             tag = path.replace(root, '').replace(os.path.sep, '')
+             if not tag == '':
+              tag = tag + ': '
+             note_files.append((re.sub('\.' + ext + '$', '', tag + title),
+                        os.path.join(path, name),
+                        os.path.getmtime(os.path.join(path, name)),
+                        tag
+                       ))
+     note_files.sort(key=lambda item: item[2], reverse=True)
+     return note_files
+
+  def rename_note(self, index):
+     if index == -1:
+       return
+     self.file_path = self.file_list[index][1]
+     self.window = sublime.active_window()
+     self.window.show_input_panel("New Name:", "", self.rename_file, None, None)
+
+  def rename_file(self, title):
+    filename = title.split("/")
+    if len(filename) > 1:
+      title = filename[len(filename)-1]
+      directory = self.notes_dir +"/"+ filename[0]
+      tag = filename[0]
+    else:
+      title = filename[0]
+      directory = self.notes_dir
+      tag = ""
+    if not os.path.exists(directory):
+      os.makedirs(directory)
+
+    ext = "." + settings().get("note_save_extension")
+    fname = os.path.join(directory, title + ext)
+    os.path.isfile(fname)
+    pardir = os.path.abspath(os.path.join(self.file_path, '..'))
+    if not os.path.isfile(fname):
+      os.rename(self.file_path,fname)
+      sublime.run_command("notes_open", {"file_path": fname})
+    else:
+      sublime.error_message("Note already exists!")
+      self.window.show_input_panel("New Name:", "", self.rename_file, None, None)
 
 
 class NotesOpenCommand(sublime_plugin.ApplicationCommand):
@@ -85,7 +144,8 @@ class NotesNewCommand(sublime_plugin.ApplicationCommand):
     if not os.path.exists(directory):
       os.makedirs(directory)
 
-    file = os.path.join(directory, title + ".md")
+    ext = "." + settings().get("note_save_extension")
+    file = os.path.join(directory, title + ext)
     if not os.path.exists(file):
       open(file, 'w+').close()
     view = sublime.active_window().open_file(file)
@@ -115,13 +175,14 @@ class NotesEvents(sublime_plugin.EventListener):
 
 class NoteInsertTitleCommand(sublime_plugin.TextCommand):
   def run(self, edit, **kwargs):
-    header = "---\n"
-    header = header + "title: " + kwargs["title"].capitalize() + "\n"
-    header = header + "date: " + time.strftime("%Y-%m-%d %H:%M:%S") + "\n"
-    header = header + "tags: " + kwargs["tag"] + "\n"
-    for yaml_el in settings().get("note_yaml"):
-      header = header + yaml_el + ":\n"
-    header = header + "---\n"
+    if settings().get("enable_yaml"):
+      header = "---\n"
+      header = header + "title: " + kwargs["title"].capitalize() + "\n"
+      header = header + "date: " + time.strftime("%Y-%m-%d %H:%M:%S") + "\n"
+      header = header + "tags: " + kwargs["tag"] + "\n"
+      for yaml_el in settings().get("note_yaml"):
+        header = header + yaml_el + ":\n"
+      header = header + "---\n"
     self.view.insert(edit, 0, header)
 
 
